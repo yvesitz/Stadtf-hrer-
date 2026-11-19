@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Zeitreise – Historischer Audioguide</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Stadtführer">
+<meta name="theme-color" content="#1f6f5c">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{--ink:#1d2a26;--mut:#65736e;--bg:#fffdf8;--line:#e4dfd2;--acc:#1f6f5c;--acc2:#b4531f;--vis:#8a948f}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:"Segoe UI",Roboto,system-ui,sans-serif;color:var(--ink)}
+#map{position:fixed;inset:0;z-index:0}
+.ui{position:fixed;z-index:1000;left:0;right:0;pointer-events:none;padding:0 10px}
+.ui>*{pointer-events:auto}
+#top{top:0;padding-top:max(10px,env(safe-area-inset-top))}
+.box{background:var(--bg);border:1px solid var(--line);border-radius:14px;box-shadow:0 4px 18px rgba(30,40,35,.22);max-width:640px;margin:0 auto}
+#search{display:flex;gap:6px;padding:6px;align-items:center}
+#search input{flex:1;min-width:0;border:0;background:transparent;font-size:16px;padding:9px 8px;outline:none;color:var(--ink)}
+#search select,#search button{border:1px solid var(--line);background:#f4efe3;border-radius:9px;padding:8px;font-size:14px;color:var(--ink)}
+#search button{cursor:pointer}
+#nav{display:none;margin-top:8px;background:var(--acc);color:#fff;border:0;padding:10px 14px}
+#nav.on{display:block}
+#nav .r1{display:flex;align-items:center;gap:14px}
+#arrow{font-size:40px;line-height:1;width:48px;text-align:center}
+#ntext{font-size:18px;font-weight:600;line-height:1.2}
+#nstreet{font-size:14px;opacity:.9;margin-top:2px}
+#nmeta{margin-top:8px;font-size:13px;opacity:.95;display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.3);padding-top:6px}
+#fab{position:fixed;right:10px;top:50%;z-index:1001;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-size:21px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}
+#sim{display:none;position:fixed;right:64px;top:calc(50% - 60px);z-index:1001;width:230px;padding:12px;font-size:13px}
+#sim.on{display:block}
+#sim h4{margin:0 0 8px;font-size:14px}
+#sim label{display:block;margin:4px 0;cursor:pointer}
+#sim .row{display:flex;gap:5px;margin-top:8px}
+#sim button{flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--line);background:#f4efe3;cursor:pointer;font-size:13px;color:var(--ink)}
+#sim button.act{background:var(--acc);color:#fff;border-color:var(--acc)}
+#sim input[type=password],#sim input[type=text]{width:100%;margin-top:4px;padding:7px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:#fff;color:var(--ink)}
+#sim hr{border:0;border-top:1px solid var(--line);margin:10px 0}
+#sim p{margin:8px 0 0;color:var(--mut);line-height:1.35}
+#bottom{bottom:0;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+#card{padding:12px 14px}
+#grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:-4px auto 8px;cursor:pointer}
+#ctitle{font-size:19px;font-weight:700;line-height:1.2}
+#csub{font-size:13px;color:var(--mut);margin:2px 0 8px}
+#chips{display:flex;gap:6px}
+#chips button{flex:1;border:1px solid var(--line);background:#f4efe3;border-radius:9px;padding:7px 4px;font-size:12.5px;cursor:pointer;color:var(--ink)}
+#chips button.act{background:var(--acc2);border-color:var(--acc2);color:#fff}
+#story{margin:10px 0;font-size:15px;line-height:1.5;max-height:26vh;overflow:auto;white-space:pre-wrap}
+#card.min #story,#card.min #chips{display:none}
+#ctl{display:flex;gap:8px;align-items:center}
+#ctl button{border:0;border-radius:10px;padding:10px 14px;font-size:15px;cursor:pointer;background:#f4efe3;color:var(--ink)}
+#ctl #play{background:var(--acc);color:#fff;flex:1;font-weight:600}
+#ctl #go{background:var(--acc2);color:#fff}
+#prog{height:3px;background:var(--line);border-radius:2px;margin-top:10px;overflow:hidden}
+#prog i{display:block;height:100%;width:0;background:var(--acc2);transition:width .3s}
+#toast{position:fixed;left:50%;top:150px;transform:translateX(-50%);z-index:2000;background:#222;color:#fff;padding:9px 14px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;max-width:90%;text-align:center}
+#toast.on{opacity:1}
+.st{width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--acc2);border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.st span{display:block;transform:rotate(45deg);color:#fff;font-weight:700;font-size:13px;text-align:center;line-height:26px}
+.st.v{background:var(--vis)}.st.t{background:var(--acc);width:36px;height:36px}.st.t span{line-height:32px}
+.me{width:18px;height:18px;border-radius:50%;background:#2a7de1;border:3px solid #fff;box-shadow:0 0 0 2px rgba(42,125,225,.4),0 2px 6px rgba(0,0,0,.4)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="ui" id="top">
+  <div class="box" id="search">
+    <select id="city" aria-label="Startpunkt">
+      <option value="koeln">Köln</option><option value="nuernberg">Nürnberg</option>
+      <option value="trier">Trier</option><option value="belgisch">Köln · Belgisches Viertel</option><option value="gps">Mein Standort</option>
+    </select>
+    <input id="q" placeholder="Ort suchen …" enterkeyhint="search" autocomplete="off">
+    <button id="qb" aria-label="Suchen">Suchen</button>
+  </div>
+  <div class="box" id="nav">
+    <div class="r1"><div id="arrow">⬆</div><div><div id="ntext"></div><div id="nstreet"></div></div></div>
+    <div id="nmeta"><span id="nrest"></span><span id="ndest"></span></div>
+  </div>
+</div>
+
+<button id="fab" aria-label="Simulation">🧭</button>
+<div class="box" id="sim">
+  <h4>Simulation</h4>
+  <label><input type="radio" name="mode" value="sim" checked> Simulierter Standort</label>
+  <label><input type="radio" name="mode" value="gps"> Echtes GPS</label>
+  <div class="row"><button id="walk">▶ Live-Walk simulieren</button></div>
+  <div class="row" id="spd"><button data-s="1" class="act">1x</button><button data-s="3">3x</button><button data-s="5">5x</button></div>
+  <p>Bei „Simulierter Standort“ setzt ein Klick auf die Karte deinen Standort. 1x entspricht etwa 11 km/h.</p>
+  <hr>
+  <h4>KI-Erzähler (Claude)</h4>
+  <label><input type="checkbox" id="aiOn"> Kapitel mit Claude erzählen</label>
+  <input type="password" id="aiKey" placeholder="Anthropic API-Key (sk-ant-…)" autocomplete="off">
+  <input type="text" id="aiModel" value="claude-sonnet-5-5" aria-label="Modell">
+  <p>Der Key bleibt nur in diesem Browser (localStorage) und geht direkt an api.anthropic.com. Ohne Key oder bei Fehlern wird der Wikipedia-Text genutzt.</p>
+</div>
+
+<div class="ui" id="bottom">
+  <div class="box" id="card">
+    <div id="grip" title="Ein-/ausklappen"></div>
+    <div id="ctitle">Lade historische Stationen …</div>
+    <div id="csub">Einen Moment, die Karte wird ausgewertet.</div>
+    <div id="chips"><button data-c="0">1 Einstieg</button><button data-c="1">2 Epoche</button><button data-c="2">3 Details</button></div>
+    <div id="story"></div>
+    <div id="ctl"><button id="prev" aria-label="Zurück">⏮</button><button id="play">▶ Vorlesen</button><button id="next" aria-label="Weiter">⏭</button><button id="go">Route</button></div>
+    <div id="prog"><i></i></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const FB=a=>a.map(x=>({name:x[0],titles:[x[1]],ll:[x[2],x[3]],type:x[4]}));
+const CITIES={koeln:{n:"Köln",ll:[50.9413,6.9583],fallback:FB([["Kölner Dom","Kölner Dom",50.9413,6.9583,"Kathedrale"],["Kölner Rathaus","Kölner Rathaus",50.9385,6.9596,"Rathaus"],["Groß St. Martin","Groß St. Martin",50.9388,6.9618,"Romanische Kirche"],["St. Maria im Kapitol","St. Maria im Kapitol",50.9337,6.9591,"Romanische Kirche"],["Gürzenich","Gürzenich",50.9380,6.9610,"Festhaus"],["Hahnentorburg","Hahnentorburg",50.9358,6.9383,"Stadttor"],["St. Gereon","St. Gereon (Köln)",50.9439,6.9490,"Romanische Kirche"],["Hohenzollernbrücke","Hohenzollernbrücke",50.9413,6.9650,"Eisenbahnbrücke"],["Römisch-Germanisches Museum","Römisch-Germanisches Museum",50.9403,6.9593,"Museum"],["Museum Ludwig","Museum Ludwig",50.9407,6.9611,"Museum"],["Severinstorburg","Severinstorburg",50.9226,6.9585,"Stadttor"],["St. Aposteln","St. Aposteln (Köln)",50.9367,6.9473,"Romanische Kirche"],["EL-DE-Haus","EL-DE-Haus",50.9387,6.9516,"NS-Dokumentationszentrum"]])},nuernberg:{n:"Nürnberg",ll:[49.4539,11.0773],fallback:FB([["Kaiserburg","Kaiserburg Nürnberg",49.4577,11.0753,"Burg"],["Sebalduskirche","Sebalduskirche",49.4569,11.0768,"Kirche"],["Albrecht-Dürer-Haus","Albrecht-Dürer-Haus",49.4578,11.0733,"Museum"],["Frauenkirche","Frauenkirche (Nürnberg)",49.4542,11.0775,"Kirche"],["Schöner Brunnen","Schöner Brunnen",49.4543,11.0783,"Brunnen"],["Lorenzkirche","St. Lorenz (Nürnberg)",49.4509,11.0770,"Kirche"],["Henkersteg","Henkersteg",49.4538,11.0718,"Brücke"],["Weißer Turm","Weißer Turm (Nürnberg)",49.4489,11.0722,"Turm"]])},trier:{n:"Trier",ll:[49.7596,6.6441],fallback:FB([["Porta Nigra","Porta Nigra",49.7597,6.6441,"Römisches Stadttor"],["Hauptmarkt","Hauptmarkt (Trier)",49.7571,6.6424,"Historischer Platz"],["Trierer Dom","Trierer Dom",49.7567,6.6437,"Kathedrale"],["Liebfrauenkirche","Liebfrauenkirche (Trier)",49.7559,6.6428,"Kirche"],["Konstantinbasilika","Konstantinbasilika",49.7544,6.6435,"Römische Palastaula"],["Kaiserthermen","Kaiserthermen (Trier)",49.7523,6.6490,"Römische Thermen"],["Amphitheater","Trierer Amphitheater",49.7503,6.6529,"Römisches Amphitheater"],["Römerbrücke","Römerbrücke (Trier)",49.7508,6.6316,"Römische Brücke"]])},
+belgisch:{n:"Belgisches Viertel",ll:[50.9383,6.9347],zoom:17,curated:[
+  {name:"Brüsseler Platz",titles:["Brüsseler Platz","Belgisches Viertel"],ll:[50.9383,6.9347],type:"Historischer Platz",
+   fb:"Das Belgische Viertel gehört zur Kölner Neustadt-Nord. Es entstand Ende des 19. Jahrhunderts, als sich die Stadt nach dem Fall der mittelalterlichen Stadtmauern erweiterte.\nDie Straßen tragen die Namen belgischer Städte und Provinzen, etwa Antwerpener Straße, Lütticher Straße, Genter Straße und Maastrichter Straße. Daher hat das Viertel seinen Namen.\nDer Brüsseler Platz wurde teilweise auf dem Gelände von Lunette 5 angelegt, einem früheren Vorwerk der Kölner Festungsanlagen. An warmen Sommerabenden ist er heute einer der beliebtesten Treffpunkte der Stadt unter freiem Himmel."},
+  {name:"St. Michael",titles:["St. Michael (Köln)","St. Michael (Köln-Neustadt-Nord)"],ll:[50.9381,6.9362],type:"Neuromanische Kirche",
+   fb:"Die neuromanische Kirche St. Michael prägt den Brüsseler Platz. Sie wurde zwischen 1902 und 1906 errichtet, das Erzbistum Köln hatte dafür ein Grundstück am Platz erworben.\nIm Zweiten Weltkrieg wurden bei einem Luftangriff am 28. September 1944 zahlreiche Bürgerhäuser des Viertels beschädigt. Auch St. Michael wurde getroffen."},
+  {name:"Christuskirche",titles:["Christuskirche (Köln)"],ll:[50.9395,6.9335],type:"Evangelische Kirche"},
+  {name:"Stadtgarten",titles:["Stadtgarten (Köln)"],ll:[50.9425,6.9345],type:"Historischer Park"},
+  {name:"Hahnentorburg",titles:["Hahnentorburg","Hahnentor (Köln)"],ll:[50.9358,6.9383],type:"Stadttor"},
+  {name:"Rudolfplatz",titles:["Rudolfplatz"],ll:[50.9360,6.9370],type:"Historischer Platz"},
+  {name:"Kölner Ringe",titles:["Kölner Ringe"],ll:[50.9380,6.9420],type:"Ringstraße"},
+  {name:"Synagoge Roonstraße",titles:["Synagoge Roonstraße","Synagoge Roonstraße (Köln)"],ll:[50.9330,6.9395],type:"Synagoge"}
+]}};
+const S={pos:null,acc:0,mode:"sim",stations:[],target:null,visited:new Set(),route:null,walking:false,speed:1,gps:null,loadCenter:null,
+  walkD:0,resumeWalk:false,lastRoute:0,routing:false,markers:{},routeId:0};
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+const WALK_BASE=3; // m/s bei 1x
+
+/* ---------- Hilfsfunktionen ---------- */
+const rad=x=>x*Math.PI/180;
+function hav(a,b){const R=6371000,dLa=rad(b[0]-a[0]),dLo=rad(b[1]-a[1]);
+  const h=Math.sin(dLa/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+function toast(t,ms=2800){const e=$("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),ms);}
+const fmtD=m=>m>=1000?(m/1000).toFixed(1).replace(".",",")+" km":Math.round(m/5)*5+" m";
+const fmtT=s=>{const m=Math.max(1,Math.round(s/60));return m>=60?Math.floor(m/60)+" h "+(m%60)+" min":m+" min";};
+function pos2(){return[S.pos.lat,S.pos.lng];}
+
+/* ---------- Karte ---------- */
+const map=L.map("map",{zoomControl:false}).setView(CITIES.koeln.ll,15);
+L.control.zoom({position:"bottomright"}).addTo(map);
+const tiles=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap-Mitwirkende"}).addTo(map);
+let tErr=0;
+tiles.on("tileerror",()=>{if(++tErr===6){map.removeLayer(tiles);L.tileLayer("https://tile.openstreetmap.de/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap-Mitwirkende"}).addTo(map);toast("Kartenanbieter gewechselt");}});
+const meMarker=L.marker(CITIES.koeln.ll,{icon:L.divIcon({className:"",html:'<div class="me"></div>',iconSize:[18,18]}),zIndexOffset:900}).addTo(map);
+const accCircle=L.circle(CITIES.koeln.ll,{radius:0,color:"#2a7de1",weight:1,fillOpacity:.12}).addTo(map);
+const routeCase=L.polyline([],{color:"#fff",weight:9,opacity:.9}).addTo(map);
+const routeLine=L.polyline([],{color:"#2a7de1",weight:5,opacity:.95}).addTo(map);
+
+map.on("click",e=>{
+  if(S.mode!=="sim")return;
+  S.touched=true;stopWalk();setPos(e.latlng.lat,e.latlng.lng,8);
+  if(S.target)fetchRoute();else autoTarget();
+});
+map.on("dragend",()=>{
+  if(S.curated)return;
+  const c=map.getCenter();
+  if(!S.loadCenter||hav([c.lat,c.lng],S.loadCenter)>1800){clearTimeout(map._d);map._d=setTimeout(()=>loadStations([c.lat,c.lng]),700);}
+});
+
+/* ---------- Position ---------- */
+function setPos(lat,lng,acc){
+  S.pos={lat,lng};S.acc=acc||0;
+  meMarker.setLatLng([lat,lng]);accCircle.setLatLng([lat,lng]).setRadius(S.acc);
+  if(S.route)updateNav();
+  checkArrival();
+}
+function checkArrival(){
+  const t=S.target;if(!t||S.visited.has(t.id)||S.arrived===t.id)return;
+  if(hav(pos2(),[t.lat,t.lng])<35){
+    S.arrived=t.id;S.visited.add(t.id);
+    S.resumeWalk=S.walking;stopWalk();refreshMarkers();
+    toast("Angekommen: "+t.name+" – Audioguide startet");
+    openStation(t,true);
+  }
+}
+if(navigator.geolocation){
+  navigator.geolocation.watchPosition(p=>{
+    S.gps={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};
+    if(!S.gpsSeen){S.gpsSeen=true;if(!S.touched){$("city").value="gps";setMode("gps");}}
+    if(S.mode==="gps"){
+      const first=!S.loadCenter||hav([S.gps.lat,S.gps.lng],S.loadCenter)>2500;
+      setPos(S.gps.lat,S.gps.lng,S.gps.acc);
+      if(first){map.setView([S.gps.lat,S.gps.lng],16);loadStations([S.gps.lat,S.gps.lng]);}
+    }
+  },err=>{S.gpsErr=err;if(err.code===1)toast("Standortzugriff nicht erlaubt. Erlaube ihn in den Einstellungen für diese Seite und lade neu.",7000);},{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+}
+function setMode(m){
+  S.mode=m;document.querySelector('input[name=mode][value='+m+']').checked=true;
+  if(m==="gps"){
+    stopWalk();
+    if(S.gps){setPos(S.gps.lat,S.gps.lng,S.gps.acc);map.setView([S.gps.lat,S.gps.lng],16);loadStations([S.gps.lat,S.gps.lng]);}
+    else toast("Warte auf GPS-Signal … (Berechtigung erlauben)",4000);
+  }
+}
+document.querySelectorAll("input[name=mode]").forEach(r=>r.onchange=()=>setMode(r.value));
+
+/* ---------- Startpunkt & Suche ---------- */
+function startAt(ll,zoom,curated,fallback){
+  S.fbList=fallback||null;
+  S.mode="sim";document.querySelector("input[name=mode][value=sim]").checked=true;
+  stopWalk();clearRoute();S.target=null;
+  setPos(ll[0],ll[1],0);map.setView(ll,zoom||16);curated?loadCurated(ll,curated):loadStations(ll);
+}
+$("city").onchange=e=>{S.touched=true;const v=e.target.value;if(v==="gps")setMode("gps");else startAt(CITIES[v].ll,CITIES[v].zoom,CITIES[v].curated,CITIES[v].fallback);};
+async function doSearch(){
+  const q=$("q").value.trim();if(!q)return;
+  try{
+    const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=de&q="+encodeURIComponent(q));
+    const j=await r.json();
+    if(!j.length)return toast("Kein Ort gefunden. Anderen Suchbegriff versuchen.");
+    S.touched=true;startAt([+j[0].lat,+j[0].lon]);toast("Start: "+j[0].display_name.split(",")[0]);
+  }catch(e){toast("Suche fehlgeschlagen. Internetverbindung prüfen.");}
+}
+$("qb").onclick=doSearch;$("q").onkeydown=e=>{if(e.key==="Enter")doSearch();};
+
+/* ---------- Overpass: Stationen ---------- */
+const HW={castle:10,city_gate:9,city_walls:8,archaeological_site:7,ruins:7,monument:6,fort:7,tower:5,memorial:3,building:4,church:5,cathedral:10,palace:9,manor:6,wayside_shrine:1,wayside_cross:1};
+const TL={castle:"Burg",city_gate:"Stadttor",city_walls:"Stadtmauer",archaeological_site:"Archäologische Stätte",ruins:"Ruine",monument:"Denkmal",fort:"Festung",tower:"Turm",memorial:"Gedenkstätte",church:"Kirche",cathedral:"Kathedrale",palace:"Schloss",manor:"Herrenhaus",square:"Historischer Platz"};
+function score(t,dist){
+  let s=0;const h=t.historic;
+  if(h&&HW[h]!==undefined)s+=HW[h];else if(h)s+=3;
+  if(t.building==="cathedral")s+=10;else if(/church|chapel/.test(t.building||""))s+=4;
+  if(t.place==="square")s+=5;if(t.tourism==="attraction")s+=3;if(t.tourism==="museum")s+=2;
+  if(t.wikidata)s+=3;if(t.heritage)s+=2;
+  s+=Math.min(Object.keys(t).length,30)*.12;return s-dist/700;
+}
+function label(t){return TL[t.historic]||(t.building==="cathedral"?"Kathedrale":/church|chapel/.test(t.building||"")?"Kirche":t.place==="square"?"Historischer Platz":t.tourism==="museum"?"Museum":"Sehenswürdigkeit");}
+async function overpass(q){
+  const acs=[];
+  const tries=OVERPASS.map(u=>{
+    const ac=new AbortController();acs.push(ac);const to=setTimeout(()=>ac.abort(),15000);
+    return fetch(u,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"data="+encodeURIComponent(q),signal:ac.signal})
+      .then(r=>{if(!r.ok)throw new Error(new URL(u).hostname+": HTTP "+r.status);return r.json();})
+      .then(j=>{if(!j.elements)throw new Error(new URL(u).hostname+": leere Antwort");return j;})
+      .catch(e=>{throw new Error(e.name==="AbortError"?new URL(u).hostname+": Zeitüberschreitung":e.message);})
+      .finally(()=>clearTimeout(to));
+  });
+  try{const j=await Promise.any(tries);acs.forEach(a=>a.abort());return j;}
+  catch(e){throw new Error(e.errors?e.errors.map(x=>x.message).join(" | "):e.message);}
+}
+async function viaOverpass(c){
+  const q=`[out:json][timeout:20];nwr(around:2000,${c[0]},${c[1]})["name"]["wikipedia"~"^de:"];out center tags 150;`;
+  const j=await overpass(q),seen=new Set(),list=[];
+  for(const e of j.elements){
+    const t=e.tags||{},lat=e.lat??(e.center&&e.center.lat),lng=e.lon??(e.center&&e.center.lon);
+    if(lat==null||!t.wikipedia)continue;
+    const title=t.wikipedia.replace(/^de:/,"");if(seen.has(title))continue;seen.add(title);
+    list.push({id:e.type[0]+e.id,name:t.name,title,lat,lng,tags:t,type:label(t),sc:score(t,hav(c,[lat,lng]))});
+  }
+  return list;
+}
+async function viaWiki(c){
+  const u=`https://de.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${c[0]}|${c[1]}&gsradius=3000&gslimit=100&format=json&origin=*`;
+  const j=await (await fetch(u)).json();
+  const KW=/dom|kirche|kathedrale|basilika|burg|schloss|tor\b|turm|mauer|denkmal|rathaus|platz|museum|synagoge|kloster|brunnen|brücke|ruine|palais|theater|markt|garten/i;
+  let g=j.query.geosearch;const f=g.filter(x=>KW.test(x.title));if(f.length>=3)g=f;
+  return g.map(x=>({id:"w"+x.pageid,name:x.title.replace(/ \(.*\)$/,""),title:x.title,lat:x.lat,lng:x.lon,tags:{},type:"Sehenswürdigkeit",sc:(KW.test(x.title)?4:0)-x.dist/700}));
+}
+async function loadStations(c){
+  S.loadCenter=c;S.curated=false;
+  $("ctitle").textContent="Lade historische Stationen …";$("csub").textContent="Abfrage über OpenStreetMap";
+  let list;
+  try{list=await viaOverpass(c);}
+  catch(e1){
+    try{list=await viaWiki(c);toast("Overpass nicht erreichbar – Stationen stammen aus der Wikipedia-Umgebungssuche",5500);}
+    catch(e2){
+      if(S.fbList){toast("Online-Daten nicht erreichbar – eingebaute Stationen werden genutzt",5000);return loadCurated(c,S.fbList);}
+      $("ctitle").textContent="Stationen konnten nicht geladen werden";
+      $("csub").textContent="Overpass: "+e1.message+". Wikipedia: "+e2.message+". Karte verschieben oder später erneut versuchen.";
+      return;
+    }
+  }
+  list.sort((x,y)=>y.sc-x.sc);S.stations=list.slice(0,10);
+  S.target=null;clearRoute();refreshMarkers();
+  if(!S.stations.length){$("ctitle").textContent="Keine Stationen gefunden";$("csub").textContent="Karte verschieben oder anderen Ort wählen.";return;}
+  toast(S.stations.length+" Stationen geladen");
+  if(S.pos)autoTarget();
+}
+async function loadCurated(c,list){
+  S.loadCenter=c;S.curated=true;S.target=null;clearRoute();
+  $("ctitle").textContent="Lade Stationen …";$("csub").textContent="Kuratierte Tour: Belgisches Viertel";
+  S.stations=list.map(x=>({id:"c:"+x.titles[0],name:x.name,title:x.titles[0],titles:x.titles,lat:x.ll[0],lng:x.ll[1],tags:{},type:x.type,fb:x.fb||"",sc:0}));
+  refreshMarkers();
+  await Promise.all(S.stations.map(async s=>{
+    for(const t of s.titles){
+      try{
+        const j=await (await fetch("https://de.wikipedia.org/w/api.php?action=query&prop=coordinates&redirects=1&format=json&origin=*&titles="+encodeURIComponent(t))).json();
+        const pg=Object.values(j.query.pages)[0];
+        if(pg.missing!==undefined)continue;
+        s.title=t;const co=pg.coordinates&&pg.coordinates[0];
+        if(co&&hav(c,[co.lat,co.lon])<3000){s.lat=co.lat;s.lng=co.lon;}
+        return;
+      }catch(e){return;}
+    }
+  }));
+  refreshMarkers();toast(S.stations.length+" Stationen im Belgischen Viertel");
+  if(S.pos)autoTarget();
+}
+function refreshMarkers(){
+  Object.values(S.markers).forEach(m=>map.removeLayer(m));S.markers={};
+  S.stations.forEach((s,i)=>{
+    const cls="st"+(S.visited.has(s.id)?" v":"")+(S.target&&S.target.id===s.id?" t":"");
+    const sz=cls.includes(" t")?36:30;
+    const m=L.marker([s.lat,s.lng],{icon:L.divIcon({className:"",html:`<div class="${cls}"><span>${i+1}</span></div>`,iconSize:[sz,sz],iconAnchor:[sz/2,sz]}),title:s.name}).addTo(map);
+    m.on("click",()=>{stopWalk();selectStation(s);});S.markers[s.id]=m;
+  });
+}
+function autoTarget(){
+  const open=S.stations.filter(s=>!S.visited.has(s.id));
+  if(!open.length){toast("Tour abgeschlossen – alle Stationen besucht 🎉");return;}
+  open.sort((a,b)=>hav(pos2(),[a.lat,a.lng])-hav(pos2(),[b.lat,b.lng]));
+  selectStation(open[0]);
+}
+
+/* ---------- Station / Wikipedia ---------- */
+function selectStation(s){
+  S.target=s;S.arrived=null;refreshMarkers();showCard(s);fetchRoute();loadStory(s);
+}
+function openStation(s,play){
+  S.target=s;showCard(s);loadStory(s).then(()=>{if(play)startChapter(0,true);});
+}
+function showCard(s){
+  stopSpeech();$("ctitle").textContent=s.name;
+  const i=S.stations.indexOf(s)+1;
+  $("csub").textContent=`Station ${i} von ${S.stations.length} · ${s.type}`;
+  $("story").textContent="Lade Geschichte aus der Wikipedia …";setChip(-1);$("card").classList.remove("min");
+}
+function loadStory(s){return s.loading||(s.loading=loadStoryInner(s).finally(()=>{s.loading=null;}));}
+async function loadStoryInner(s){
+  if(!s.chapters){
+    try{
+      const u="https://de.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&origin=*&titles="+encodeURIComponent(s.title);
+      const j=await (await fetch(u)).json();
+      const pg=Object.values(j.query.pages)[0];
+      s.raw=pg.extract||s.fb||"";s.chapters=buildChapters(s,s.raw);
+    }catch(e){s.chapters=["Die Geschichte zu „"+s.name+"“ konnte nicht geladen werden. Bitte Internetverbindung prüfen.","",""];}
+  }
+  if(AI.on()&&s.raw&&!s.aiTried){
+    s.aiTried=true;if(S.target===s)$("story").textContent="Der KI-Erzähler schreibt deine Kapitel …";
+    try{s.chapters=await aiChapters(s);}catch(e){toast("KI-Erzähler: "+e.message+" – Wikipedia-Text wird genutzt",5000);}
+  }
+  if(S.target===s){setChip(0);$("story").textContent=s.chapters[0]||"";S.cur=0;}
+}
+
+/* ---------- KI-Erzähler (Claude API) ---------- */
+const AI={
+  on(){return $("aiOn").checked&&$("aiKey").value.trim().length>10;},
+  save(){try{localStorage.setItem("ai",JSON.stringify({on:$("aiOn").checked,key:$("aiKey").value.trim(),model:$("aiModel").value.trim()}));}catch(e){}},
+  load(){try{const v=JSON.parse(localStorage.getItem("ai")||"null");if(v){$("aiOn").checked=!!v.on;$("aiKey").value=v.key||"";if(v.model)$("aiModel").value=v.model;}}catch(e){}}
+};
+["aiOn","aiKey","aiModel"].forEach(id=>$(id).addEventListener("change",AI.save));
+AI.load();
+async function aiChapters(s){
+  const sys="Du bist ein kundiger Stadtführer, der eine einzelne Person auf einem Spaziergang begleitet. Sprich sie direkt mit „du“ an, persönlich und locker wie ein Bekannter, der die Stadt gut kennt. Keine Witze, keine Wortspiele, keine Gruppenansprache (nie „ihr“, „wir“, „liebe Gäste“, „Willkommen“). Du schreibst gesprochene Audiotexte auf Deutsch: kurze, klare Sätze, ohne Aufzählungen, Markdown, Emojis oder Klammern. Nutze ausschließlich Fakten aus dem gelieferten Wikipedia-Text und erfinde nichts. Antworte nur mit gültigem JSON.";
+  const user=`Station: ${s.name} (${s.type})\n\nWikipedia-Text:\n${s.raw.slice(0,7000)}\n\nSchreibe drei Audio-Kapitel von je etwa 120 bis 170 Wörtern:\n1. Der erste Eindruck und Einstieg: steige ohne Begrüßungsfloskel ein und beschreibe, was die Person vor sich sieht.\n2. Historischer Hintergrund und Epoche: Einordnung in die Zeit, wichtige Daten und Personen.\n3. Spannende Details und Geheimnisse: Überraschendes, Anekdoten, besondere Fakten.\nFormat: {"kapitel":["...","...","..."]}`;
+  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":$("aiKey").value.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:$("aiModel").value.trim()||"claude-sonnet-5-5",max_tokens:2000,system:sys,messages:[{role:"user",content:user}]})});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error&&e.error.message?e.error.message:"HTTP "+r.status);}
+  const j=await r.json(),t=j.content.filter(b=>b.type==="text").map(b=>b.text).join("");
+  const o=JSON.parse(t.slice(t.indexOf("{"),t.lastIndexOf("}")+1));
+  if(!Array.isArray(o.kapitel)||o.kapitel.length<3)throw new Error("Unerwartetes Antwortformat");
+  return o.kapitel.slice(0,3).map(x=>String(x).trim());
+}
+function cut(t,max){
+  if(t.length<=max)return t;
+  const c=t.slice(0,max),i=Math.max(c.lastIndexOf(". "),c.lastIndexOf("! "),c.lastIndexOf("? "));
+  return i>max*.4?c.slice(0,i+1):c;
+}
+function buildChapters(s,text){
+  let P=text.split("\n").map(l=>l.trim()).filter(l=>l&&!/^=+/.test(l)&&l.length>50).map(l=>l.replace(/\s*\([^()]{0,60}\)/g,m=>/\d{3}/.test(m)?m:"").replace(/\[\d+\]/g,""));
+  if(!P.length)return["Zu dieser Station liegt in der Wikipedia leider kein ausführlicher Text vor.","",""];
+  const take=(from,min,max)=>{let out="",i=from;while(i<P.length&&out.length<min){out+=(out?"\n\n":"")+P[i];i++;}return[cut(out,max),i];};
+  let [a,p1]=take(0,550,900);
+  let [b,p2]=take(p1,1000,1500);
+  const start3=Math.max(p2,Math.floor(P.length*.6));
+  let [c,]=take(Math.min(start3,P.length-1),700,1100);
+  if(!b)b="Weitere Epochenangaben sind in der Wikipedia zu dieser Station nicht verzeichnet.";
+  if(!c||c===b)c="Mehr Details und Geheimnisse findest du im Wikipedia-Artikel „"+s.title+"“.";
+  a="Du stehst jetzt an dieser Station: "+s.name+". "+a;
+  return[a,b,c];
+}
+
+/* ---------- Audio (Web Speech API) ---------- */
+const synth=window.speechSynthesis;let voice=null;
+function pickVoice(){if(!synth)return;const v=synth.getVoices();voice=v.find(x=>/^de[-_]DE/i.test(x.lang)&&/google|natural|anna|katja|markus/i.test(x.name))||v.find(x=>/^de/i.test(x.lang))||null;}
+if(synth){pickVoice();synth.onvoiceschanged=pickVoice;}
+const A={playing:false,chunks:[],ci:0,sid:0,started:false};
+function unlock(){if(!synth||unlock.d)return;unlock.d=true;try{const u=new SpeechSynthesisUtterance(" ");u.volume=0;synth.speak(u);}catch(e){}}
+addEventListener("pointerdown",unlock,{capture:true});addEventListener("touchend",unlock,{capture:true});
+function setChip(i){document.querySelectorAll("#chips button").forEach((b,k)=>b.classList.toggle("act",k===i));}
+function chunk(t){return(t.replace(/\s+/g," ").match(/[^.!?]+[.!?]*\s*/g)||[t]).reduce((o,s)=>{const l=o[o.length-1];if(l&&l.length+s.length<180)o[o.length-1]+=s;else o.push(s);return o;},[]);}
+function startChapter(i,auto){
+  const s=S.target;if(!s||!s.chapters)return;
+  if(!synth){toast("Dieser Browser unterstützt keine Sprachausgabe.");return;}
+  i=Math.max(0,Math.min(2,i));S.cur=i;setChip(i);$("story").textContent=s.chapters[i];
+  if(!s.chapters[i]){return;}
+  A.chunks=chunk(s.chapters[i]);A.ci=0;A.auto=auto!==false;speakFrom();
+}
+function speakFrom(){
+  unlock();synth.cancel();synth.resume();const id=++A.sid;A.playing=true;A.started=false;$("play").textContent="⏸ Pause";
+  setTimeout(()=>{if(id===A.sid&&A.playing&&!A.started)toast("Keine Sprachausgabe. Prüfe, ob das iPhone nicht auf lautlos steht und ob eine deutsche Stimme installiert ist (Einstellungen › Bedienungshilfen › Gesprochene Inhalte › Stimmen).",8000);},4000);
+  const say=()=>{
+    if(id!==A.sid)return;
+    if(A.ci>=A.chunks.length){A.playing=false;$("play").textContent="▶ Vorlesen";chapterDone();return;}
+    const u=new SpeechSynthesisUtterance(A.chunks[A.ci]);u.lang="de-DE";if(voice)u.voice=voice;u.rate=.97;
+    u.onstart=()=>{A.started=true;};
+    u.onend=()=>{if(id!==A.sid)return;A.ci++;prog();say();};u.onerror=()=>{if(id===A.sid&&A.playing){A.ci++;say();}};
+    synth.speak(u);
+  };
+  setTimeout(say,150);
+}
+function prog(){const t=S.target;let tot=0,done=0;if(!t||!t.chapters)return;
+  t.chapters.forEach((c,k)=>{tot+=c.length;if(k<S.cur)done+=c.length;});
+  done+=A.chunks.slice(0,A.ci).join("").length;document.querySelector("#prog i").style.width=(tot?done/tot*100:0)+"%";}
+function chapterDone(){
+  if(S.cur<2&&A.auto){setTimeout(()=>startChapter(S.cur+1,true),700);}
+  else if(S.cur===2){
+    document.querySelector("#prog i").style.width="100%";
+    if(S.resumeWalk){S.resumeWalk=false;toast("Weiter zur nächsten Station");autoTarget();setTimeout(startWalk,1200);}
+  }
+}
+function stopSpeech(){A.sid++;A.playing=false;if(synth)synth.cancel();$("play").textContent="▶ Vorlesen";}
+$("play").onclick=()=>{
+  if(!S.target)return;
+  if(A.playing){A.sid++;A.playing=false;synth.cancel();$("play").textContent="▶ Weiter";}
+  else if(A.chunks.length&&A.ci<A.chunks.length&&$("play").textContent.includes("Weiter"))speakFrom();
+  else startChapter(S.cur||0,true);
+};
+$("prev").onclick=()=>startChapter((S.cur||0)-1,true);
+$("next").onclick=()=>{if((S.cur||0)<2)startChapter((S.cur||0)+1,true);else{S.visited.add(S.target.id);refreshMarkers();stopSpeech();autoTarget();}};
+document.querySelectorAll("#chips button").forEach(b=>b.onclick=()=>startChapter(+b.dataset.c,true));
+$("go").onclick=()=>{if(S.target){fetchRoute();}else autoTarget();};
+$("grip").onclick=()=>$("card").classList.toggle("min");
+
+/* ---------- OSRM Routing & Navigation ---------- */
+const MOD={left:"links abbiegen","slight left":"leicht links halten","sharp left":"scharf links abbiegen",right:"rechts abbiegen","slight right":"leicht rechts halten","sharp right":"scharf rechts abbiegen",straight:"geradeaus weitergehen",uturn:"wenden"};
+const ARW={left:"⬅","slight left":"↖","sharp left":"↙",right:"➡","slight right":"↗","sharp right":"↘",straight:"⬆",uturn:"⮌"};
+function instr(st){
+  const m=st.maneuver,mod=m.modifier;
+  if(m.type==="arrive")return["⚑","Ziel erreicht"];
+  if(m.type==="depart")return["⬆","Losgehen"];
+  if(m.type==="roundabout"||m.type==="rotary")return["⟳","Im Kreisverkehr die Ausfahrt nehmen"];
+  return[ARW[mod]||"⬆",(MOD[mod]||"weitergehen").replace(/^./,c=>c.toUpperCase())];
+}
+function clearRoute(){S.route=null;routeLine.setLatLngs([]);routeCase.setLatLngs([]);$("nav").classList.remove("on");}
+async function fetchRoute(){
+  const t=S.target;if(!t||!S.pos||S.routing)return;
+  S.routing=true;S.lastRoute=Date.now();const rid=++S.routeId;
+  const p=S.pos;
+  try{
+    const url=`https://router.project-osrm.org/route/v1/foot/${p.lng},${p.lat};${t.lng},${t.lat}?overview=full&geometries=geojson&steps=true&language=de`;
+    const j=await (await fetch(url)).json();
+    if(j.code!=="Ok")throw new Error(j.code);
+    if(rid!==S.routeId)return;
+    const r=j.routes[0],co=r.geometry.coordinates.map(c=>[c[1],c[0]]);
+    buildRoute(co,r.legs[0].steps,r.distance,r.duration,true);
+  }catch(e){
+    const co=[[p.lat,p.lng],[t.lat,t.lng]],d=hav(co[0],co[1]);
+    buildRoute(co,[{distance:d,name:"",maneuver:{type:"depart",location:[p.lng,p.lat]}},{distance:0,name:t.name,maneuver:{type:"arrive",location:[t.lng,t.lat]}}],d,d/1.3,false);
+    toast("Routing nicht erreichbar – Luftlinie wird angezeigt");
+  }finally{S.routing=false;}
+}
+function buildRoute(co,steps,dist,dur,real){
+  const cum=[0];for(let i=1;i<co.length;i++)cum.push(cum[i-1]+hav(co[i-1],co[i]));
+  const tot=cum[cum.length-1]||1,k=tot/(dist||tot);let acc=0;
+  const ends=steps.map(s=>(acc+=s.distance*k));
+  S.route={co,cum,tot,steps,ends,dur,dist:tot,real};
+  routeCase.setLatLngs(co);routeLine.setLatLngs(co).setStyle({dashArray:real?null:"8 8"});
+  if(!S.fitted||S.fitted!==S.target.id){S.fitted=S.target.id;map.fitBounds(L.latLngBounds(co).extend(pos2()),{padding:[120,60],maxZoom:17});}
+  S.walkD=0;$("nav").classList.add("on");updateNav();
+}
+function nearestIdx(){
+  const R=S.route,p=pos2();let bi=0,bd=1e12;
+  for(let i=0;i<R.co.length;i++){const d=(R.co[i][0]-p[0])**2+((R.co[i][1]-p[1])*Math.cos(rad(p[0])))**2;if(d<bd){bd=d;bi=i;}}
+  return{i:bi,d:hav(p,R.co[bi])};
+}
+function updateNav(){
+  const R=S.route;if(!R)return;
+  const n=nearestIdx(),along=R.cum[n.i];
+  if(n.d>60&&!S.routing&&Date.now()-S.lastRoute>8000&&!S.walking){fetchRoute();}
+  const rest=Math.max(0,R.tot-along);
+  let si=R.ends.findIndex(e=>e>along+1);if(si<0)si=R.steps.length-1;
+  const nx=R.steps[Math.min(si+1,R.steps.length-1)],cur=R.steps[si];
+  const toMan=Math.max(0,R.ends[si]-along);
+  const [ar,tx]=instr(nx);
+  $("arrow").textContent=ar;
+  $("ntext").textContent=(nx.maneuver.type==="arrive"?tx:tx)+" · in "+fmtD(toMan);
+  $("nstreet").textContent=nx.maneuver.type==="arrive"?"Ziel: "+(S.target?S.target.name:""):(nx.name?"auf "+nx.name:(cur.name?"weiter auf "+cur.name:"dem Weg folgen"));
+  $("nrest").textContent=fmtD(rest)+" · "+fmtT(rest/1.35);
+  $("ndest").textContent=S.target?S.target.name:"";
+}
+
+/* ---------- Live-Walk-Simulation ---------- */
+function pointAt(d){
+  const R=S.route;if(d>=R.tot)return R.co[R.co.length-1];
+  let i=1;while(i<R.cum.length-1&&R.cum[i]<d)i++;
+  const a=R.co[i-1],b=R.co[i],seg=R.cum[i]-R.cum[i-1]||1,f=(d-R.cum[i-1])/seg;
+  return[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f];
+}
+function startWalk(){
+  if(S.mode!=="sim"){setMode("sim");}
+  if(!S.route){toast("Zuerst eine Station wählen, dann Route abwarten.");return;}
+  stopWalk();S.walking=true;$("walk").textContent="⏸ Walk stoppen";$("walk").classList.add("act");
+  S.walkD=R_along();let last=performance.now();
+  S.timer=setInterval(()=>{
+    const now=performance.now(),dt=(now-last)/1000;last=now;
+    if(!S.route){stopWalk();return;}
+    S.walkD+=WALK_BASE*S.speed*dt;
+    const p=pointAt(S.walkD);setPos(p[0],p[1],6);
+    if(S.walking&&S.mode==="sim")map.panTo(p,{animate:true,duration:.25,noMoveStart:true});
+    if(S.walkD>=S.route.tot)stopWalk();
+  },200);
+}
+function R_along(){return S.route?S.route.cum[nearestIdx().i]:0;}
+function stopWalk(){clearInterval(S.timer);S.walking=false;$("walk").textContent="▶ Live-Walk simulieren";$("walk").classList.remove("act");}
+$("walk").onclick=()=>S.walking?stopWalk():startWalk();
+document.querySelectorAll("#spd button").forEach(b=>b.onclick=()=>{
+  S.speed=+b.dataset.s;document.querySelectorAll("#spd button").forEach(x=>x.classList.toggle("act",x===b));
+});
+$("fab").onclick=()=>$("sim").classList.toggle("on");
+
+/* ---------- Start ---------- */
+startAt(CITIES.koeln.ll,16,undefined,CITIES.koeln.fallback);
+</script>
+</body>
+</html>
